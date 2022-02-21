@@ -1,0 +1,1404 @@
+/*
+ BOMB_Fake Dominacao SD MataMata Dominacao 3 BOTOES
+ */
+
+#include <Wire.h>
+#include <Keypad.h>
+#include <LiquidCrystal.h>
+     
+  char* menu1[]={"   MATA-MATA"," ACHE E DESARME","   DOMINACAO"};
+  char* menu2[]={"  20 MINUTOS","  15 MINUTOS  ","  05 MINUTOS  "};
+  char* ARM_TIME="TEMPO PARA ARMAR:";
+  char* GAME_TIME="TEMPO DE JOGO:";
+  char* ENABLE_SOUND="HABILITAR SOM?";
+  char* YES_OR_NOT="PRESS SIM OU NAO";
+  char* GAME_TIME_TOP="TEMPO DE JOGO  ";
+  char* ARMING_BOMB = "ARMANDO BOMBA";
+  char* ENTER_CODE ="ENTRAR COM SENHA";
+  char* CODE_ERROR ="ERRO DE SENHA!";
+  char* BOMB_ARMED ="BOMBA ARMADA";
+  char* DETONATION_IN = "  DETONA EM:  ";
+  char* DISARMA ="DESARMANDO BOMBA" ;
+  char* DISARM ="BOMBA DESARMADA";
+  char* GAME_OVER = " GAME OVER! ";
+  char* DEFENDERS_WIN = " CT GANHOU ";
+  
+
+
+const byte ROWS = 4; //QUANTIDADE DE LINHAS DO TECLADO
+const byte COLS = 4; //QUANTIDADE DE COLUNAS DO TECLADO
+
+//CONSTRUÇÃO DA MATRIZ DE CARACTERES
+char keys[ROWS][COLS] = {
+  {'A','A','A','A'},
+  {'B','B','B','B'},
+  {'C','C','C','C'},
+  {'D','D','D','D'}
+};
+
+byte rowPins[ROWS] = {
+  13, 12, 17, 8
+ }; //PINOS UTILIZADOS PELAS LINHAS
+ byte colPins[COLS] = {
+  19, 15, 16, 18
+ }; //PINOS UTILIZADOS PELAS COLUNAS
+
+//INICIALIZAÇÃO DO TECLADO
+Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
+
+char codeInput[8];
+byte time[4];
+boolean refresh=true;//1 refresh one time...
+char password[8];
+int key=-1;
+char lastKey;
+char var;
+boolean passwordEnable=false;
+
+//Buttons for lcd shield
+char BT_UP = 'A';
+char BT_DOWN = 'B';
+char BT_SEL = 'D';   // Ok key
+char BT_CANCEL = 'C';
+char BT_DEFUSER = 'x';   // not implemented
+
+//leds
+
+const int REDLED = 11;
+const int GREENLED = 10;
+//const int BLUELED = 13;
+
+
+// RELAYPIN
+boolean relayEnable = false;
+const int SIR = 14;
+//IS VERY IMPORTANT THAT YOU TEST THIS TIME. BY DEFAULT IS IN 1 SEC. THAT IS NOT TOO MUCH. SO TEST IT!
+const int RELAY_TIME = 7000;
+
+//TIME INTS
+int GAMEHOURS = 0;
+int GAMEMINUTES = 45;
+int BOMBMINUTES = 4;
+int ACTIVATESECONDS = 5;
+
+boolean endGame = false;
+boolean sdStatus = false; //search and destroy game enable used in config
+boolean mmStatus = false; //same but SAbotaghe
+boolean doStatus = false; //for DEmolition
+boolean start = true;
+boolean defusing;
+boolean cancelando;
+
+// SOUND TONES
+boolean soundEnable = true;
+int tonepin = 9; 
+int alarmTone1 = 700;
+int alarmTone2 = 2600;
+int activeTone = 1330;
+int errorTone = 100;
+
+unsigned long iTime;
+unsigned long timeCalcVar;
+unsigned long redTime;
+unsigned long greenTime;
+unsigned long iZoneTime;
+
+//initial time for zone
+byte team=0; // 0 = neutral, 1 = green team, 2 = red team...
+
+
+LiquidCrystal lcd(7, 6, 5, 4, 3, 2); //PORTAS DO ARDUINO QUE SÃO UTILIZADAS PELO DISPLAY LCD
+
+void setup(){
+  Serial.begin(9600);
+  lcd.begin(16, 2); //SETA A QUANTIDADE DE COLUNAS(16) E O NÚMERO DE LINHAS(2) DO DISPLAY. EM SUMA: UMA MATRIZ DE 16 COLUNAS E 2 LINHAS
+ // lcd.init();
+ // lcd.backlight();
+  
+  //PinModes
+  pinMode(GREENLED, OUTPUT);   
+  pinMode(REDLED, OUTPUT);
+  pinMode(SIR, OUTPUT);
+
+  lcd.print("    B.I.F.E  ");
+  lcd.setCursor(0,1);
+  lcd.print("  *** TEAM ***");
+  
+  delay (3000);
+  digitalWrite(GREENLED, HIGH); // sets the LED on
+  digitalWrite(REDLED, HIGH);
+  lcd.begin(16, 2);
+  lcd.print("     AIRSOFT  ");
+  lcd.setCursor(0,1);
+  lcd.print("  *** BOMB ***");
+  digitalWrite(SIR,HIGH);
+  delay (2000);
+  digitalWrite(SIR,LOW);
+  tone(tonepin,2400,30);
+  delay (2000);
+  digitalWrite(GREENLED, LOW); // sets the LED off
+  digitalWrite(REDLED, LOW);
+  lcd.begin(16, 2);
+  Serial.begin(9600);
+  lcd.setCursor(0,0);
+  
+  
+  keypad.setHoldTime(50);
+  keypad.setDebounceTime(50);
+  keypad.addEventListener(keypadEvent);//add an event listener for this keypad
+
+  // configuração BARRAS navegação
+ byte bar1[8] = {
+    B10000,
+    B10000,
+    B10000,
+    B10000,
+    B10000,
+    B10000,
+    B10000,
+    B10000,
+  };
+  byte bar2[8] = {
+    B11000,
+    B11000,
+    B11000,
+    B11000,
+    B11000,
+    B11000,
+    B11000,
+    B11000,
+  };
+  byte bar3[8] = {
+    B11100,
+    B11100,
+    B11100,
+    B11100,
+    B11100,
+    B11100,
+    B11100,
+    B11100,
+  };
+  byte bar4[8] = {
+    B11110,
+    B11110,
+    B11110,
+    B11110,
+    B11110,
+    B11110,
+    B11110,
+    B11110,
+  };
+  byte bar5[8] = {
+    B11111,
+    B11111,
+    B11111,
+    B11111,
+    B11111,
+    B11111,
+    B11111,
+    B11111,
+  };
+  byte up[8] = {
+    B00000,
+    B00100,
+    B01110,
+    B11111,
+    B11111,
+    B00000,
+    B00000,
+  };
+
+  byte down[8] = {
+    B00000,
+    B00000,
+    B11111,
+    B11111,
+    B01110,
+    B00100,
+    B00000,
+  };
+
+
+  lcd.createChar(0,bar1);
+  lcd.createChar(1,bar2);
+  lcd.createChar(2,bar3);
+  lcd.createChar(3,bar4);
+  lcd.createChar(4,bar5);
+  lcd.createChar(5,up);
+  lcd.createChar(6,down);
+}
+
+
+void loop(){
+ 
+  menuPrincipal();
+  digitalWrite(SIR,LOW );
+
+}
+void keypadEvent(KeypadEvent key){
+  switch (keypad.getState()){
+    case RELEASED:
+      switch (key){
+         case 'B': defusing=false;
+         break;
+         case 'D': defusing=false;
+         break;
+         case 'A': cancelando=false;
+         break;
+      }
+    break;
+    case HOLD:
+      switch (key){
+        case 'B': defusing= true;
+        break;
+        case 'D': defusing= true;
+        break;
+        case 'A': cancelando=true;
+        break;
+      }
+    break;
+  }
+}
+//##################MENUS###############################
+
+void menuPrincipal(){   //MAIN MENU
+
+  digitalWrite(SIR,LOW );
+  digitalWrite(GREENLED, LOW);
+  digitalWrite(REDLED, LOW);
+
+  //   if whe start a new game from another we need to restart propertly this variables
+  sdStatus=false;
+  doStatus=false;
+  mmStatus=false;
+  //Draw menu
+  cls();//clear lcd and set cursor to 0,0
+  int i=0;
+ // HERE YOU CAN ADD MORE ITEMS ON THE MAIN MENU
+  lcd.print(menu1[i]);
+  lcd.setCursor(15,1);
+  checkArrows(i,2);
+  while(1){
+
+    var = keypad.waitForKey();
+    if(var == BT_UP && i>0){
+      tone(tonepin,2400,30);
+      i--;
+      cls();
+      lcd.print(menu1[i]);
+      checkArrows(i,2);
+      delay(50);
+    }
+    if(var == BT_DOWN && i<2){
+      tone(tonepin,2400,30);
+      i++;
+      cls();
+      lcd.print(menu1[i]); 
+      checkArrows(i,2);
+      delay(50);
+    }
+
+    if(var == BT_SEL){
+      tone(tonepin,2400,30);
+      cls();
+      switch (i){
+
+      case 0:
+        mmStatus=true;
+        configmm();
+        startGameCount();
+        matamata();
+        break;
+
+      case 1:
+        sdStatus=true;
+        configQuickGame();
+        startGameCount();
+        search();
+        break;
+        
+      case 2:
+
+        doStatus=true;
+        configQuickGame();
+        startGameCount();
+        domination();
+        break;
+
+      }
+    }
+  }
+}
+
+
+void configQuickGame(){
+  //digitalWrite(SIR,HIGH );
+
+  cls();
+  //GAME TIME
+  if(sdStatus || doStatus){
+    menu1:
+    GAMEMINUTES= (time[0]+15);
+  }
+  //BOMB TIME
+  if(sdStatus){
+    menu2:
+        BOMBMINUTES= (time[0]+3);    
+  }
+  //ARMING TIME
+  if(sdStatus || doStatus){
+    menu3:
+        ACTIVATESECONDS= (time[0]+00,6);
+        relayEnable=true;
+        passwordEnable = false;
+  }
+//sound??
+  if(sdStatus){
+    cls();
+    lcd.print(ENABLE_SOUND);
+    lcd.setCursor(0,1);
+    lcd.print(YES_OR_NOT);
+
+    while(1)
+    {
+      var = keypad.waitForKey();
+      if(var == 'A' ){
+        soundEnable=true;
+        tone(tonepin,2400,30);
+        break;
+      }
+
+      if(var == 'B' ){
+        soundEnable=false;
+        tone(tonepin,2400,30);
+        break;
+      }
+    }
+  }  
+}
+
+// Configuração tempo mata mata
+void configmm(){
+
+  cls();
+  //GAME TIME
+  if(mmStatus){
+    menu1:
+  digitalWrite(SIR,LOW );
+  digitalWrite(GREENLED, LOW);
+  digitalWrite(REDLED, LOW);
+  mmStatus=false;
+  //Draw menu
+  cls();//clear lcd and set cursor to 0,0
+  int i=0;
+ // HERE YOU CAN ADD MORE ITEMS ON THE MAIN MENU
+  lcd.print(menu2[i]);
+  lcd.setCursor(15,1);
+  checkArrows(i,2);
+  while(1){
+
+    var = keypad.waitForKey();
+    if(var == BT_UP && i>0){
+      tone(tonepin,2400,30);
+      i--;
+      cls();
+      lcd.print(menu2[i]);
+      checkArrows(i,2);
+      delay(50);
+    }
+    if(var == BT_DOWN && i<2){
+      tone(tonepin,2400,30);
+      i++;
+      cls();
+      lcd.print(menu2[i]); 
+      checkArrows(i,2);
+      delay(50);
+    }
+
+    if(var == BT_SEL){
+      tone(tonepin,2400,30);
+      cls();
+      switch (i){
+
+      case 0:
+        mmStatus=true;
+        GAMEMINUTES= (time[0]+20);
+        soundEnable=false;
+        relayEnable=true;
+        passwordEnable = false;
+        startGameCount();
+        matamata();
+        break;
+
+      case 1:
+        mmStatus=true;
+        GAMEMINUTES= (time[0]+15);
+        soundEnable=false;
+        relayEnable=true;
+        passwordEnable = false;
+        startGameCount();
+        matamata();
+        break;
+        
+      case 2:
+        mmStatus=true;
+        GAMEMINUTES= (time[0]+5);
+        soundEnable=false;
+        relayEnable=true;
+        passwordEnable = false;
+        startGameCount();
+        matamata();
+        break;
+       }
+      }
+    }
+  }
+}
+
+
+void matamata(){
+  
+  refresh = true;
+  cls();
+  digitalWrite(REDLED, LOW);
+  digitalWrite(GREENLED, LOW);
+  //SETUP INITIAL TIME
+  int minutos = GAMEMINUTES - 1;
+  unsigned long iTime = millis(); //  initialTime in millisec
+  unsigned long aTime;
+
+  //Starting Game Code
+  while (1) { // this is the important code, is a little messy but works good.
+
+    //If you fail disarm.
+    if (endGame) {
+      fimMatamata();
+    }
+
+    lcd.setCursor(1, 0);
+    lcd.print(GAME_TIME_TOP);
+    aTime = millis() - iTime;
+    lcd.setCursor(3, 1);
+
+    //PRINT TIME ON LCD
+
+    printTime(minutos, aTime);
+
+    //###########################CHECKINGS##################
+   unsigned long xTime = millis(); //start disabling time
+   unsigned int percent = 0;
+   
+    //Check If Game End
+    if (minutos - aTime / 60000 == 0 && 59 - ((aTime / 1000) % 60) == 0)fimMatamata();
+    
+        //check if game time runs out during the disabling
+        aTime = millis() - iTime;
+        Serial.println(millis()-xTime);
+        if ((minutos - aTime / 60000 == 0 && 59 - ((aTime / 1000) % 60) == 0) || minutos - aTime / 60000 > 4000000000) {
+          endGame = true;
+        }
+  } 
+}
+  
+void fimMatamata(){
+    lcd.clear();
+    lcd.setCursor(2,0);
+    lcd.print("FIM DE JOGO!");
+    digitalWrite(SIR,HIGH );
+    delay(2000);
+    delay(RELAY_TIME);
+    digitalWrite(SIR,LOW );
+    cls();
+    lcd.print("JOGAR DE NOVO?");
+    lcd.setCursor(0,1);
+    lcd.print(YES_OR_NOT);
+  while(1)
+  {
+    var = keypad.waitForKey();
+    if(var == 'A' ){
+      tone(tonepin,2400,30);
+      cls();
+      matamata();
+      break;
+    }
+    if(var == 'B' ){
+      tone(tonepin,2400,30);
+      menuPrincipal();
+      break;
+    }
+   menuPrincipal();
+  }
+}
+
+
+void domination(){
+  
+
+  //SETUP INITIAL TIME
+  int minutos = GAMEMINUTES-1;
+  boolean showGameTime=true;
+  unsigned long a;
+  unsigned long iTime=millis(); //  initialTime in millisec
+  unsigned long aTime;
+
+  team=0;
+  iZoneTime=0;
+  aTime=0;
+  redTime=0;
+  greenTime=0;
+
+  int largoTono = 50;
+  // 0 = neutral, 1 = green team, 2 = red team
+  a=millis();
+  //Starting Game Code
+  while(1)  // this is the important code, is a little messy but works good.
+  {
+    if(endGame){
+      gameOver();
+    }
+ 
+    keypad.getKey();
+    aTime=millis()- iTime;
+    //Code for led blinking
+    timeCalcVar=(millis()- iTime)%1000;
+    if(timeCalcVar >= 0 && timeCalcVar <= 40)
+    {
+      if(team==1)digitalWrite(GREENLED, HIGH);
+      if(team==2)digitalWrite(REDLED, HIGH);
+    }
+    if(timeCalcVar >= 50 && timeCalcVar <= 100)
+    { 
+      if(team==1)digitalWrite(GREENLED, LOW);
+      if(team==2)digitalWrite(REDLED, LOW);
+    }
+    // Sound!!! same as Destroy
+    if(timeCalcVar >= 0 && timeCalcVar <= 40 && soundEnable)tone(tonepin,activeTone,largoTono);
+
+    if(timeCalcVar >= 245 && timeCalcVar <= 255 && minutos-aTime/60000<2 && soundEnable)tone(tonepin,activeTone,largoTono);
+    if(timeCalcVar >= 495 && timeCalcVar <= 510 && minutos-aTime/60000<4 && soundEnable)tone(tonepin,activeTone,largoTono);
+    if(timeCalcVar >= 745 && timeCalcVar <= 760 && minutos-aTime/60000<2 && soundEnable)tone(tonepin,activeTone,largoTono);
+    //Help to count 3 secs
+    if(a+2000<millis()){
+      a=millis(); 
+      showGameTime=!showGameTime;
+      cls();
+    }
+    //THE NEXT TO METHODS SHOW "GAME TIME" AND "CONTROLED ZONE TIME" IT SHOWS 2 AND 2 SEC EACH
+
+    if(showGameTime){ //THE SECOND IS /2
+      lcd.setCursor(1,0);
+      lcd.print("TEMPO DE JOGO");
+      lcd.setCursor(3,1);
+      printTime(minutos, aTime);
+    }
+    else if (!showGameTime){
+
+      lcd.setCursor(2,0);
+      if(team == 0)lcd.print("ZONA NEUTRA");
+      if(team == 1)lcd.print("ZONA VERDE");
+      if(team == 2)lcd.print("ZONA VERMELHA");
+
+      if(team>0){
+        lcd.setCursor(3,1);
+        printTimeDom(millis()-iZoneTime,true);
+      }
+    }
+
+    //###########################CHECKINGS##################
+
+    //Check If Game End
+    if(minutos-aTime/60000==0 && 59-((aTime/1000)%60)==0)
+    {
+      gameOver();
+    }
+
+    //Check If IS neutral
+    while((defusing || cancelando) && team > 0)
+    {
+      cls();
+      if(team>0)lcd.print("NEUTRALIZANDO...");
+      lcd.setCursor(0,1);
+      unsigned int percent=0;
+      unsigned long xTime=millis(); //start disabling time
+      while(defusing || cancelando)
+      {
+        //check if game time runs out during the disabling
+        aTime= millis()- iTime;
+        if((minutos-aTime/60000==0 && 59-((aTime/1000)%60)==0) || minutos-aTime/60000>4000000000){
+          endGame = true;
+        }
+     
+        keypad.getKey();
+        timeCalcVar = (millis()- xTime)%1000;
+
+        if( timeCalcVar >= 0 && timeCalcVar <= 20)
+        {
+          if(soundEnable)tone(tonepin,alarmTone1,200);
+        }
+        if(timeCalcVar >= 480 && timeCalcVar <= 500)
+        {
+          if(soundEnable)tone(tonepin,alarmTone2,200);
+          digitalWrite(REDLED, LOW);
+        }
+
+        unsigned long seconds= millis() - xTime;
+        percent = (seconds)/(ACTIVATESECONDS*10);
+        drawBar(percent);
+
+        if(percent >= 100)
+        {
+          delay(1000);
+
+          if(team==1){
+            greenTime+=millis()-iZoneTime;
+            iZoneTime=0;
+
+          }
+          if(team==2){
+            redTime+=millis()-iZoneTime;
+            iZoneTime=0;
+          }
+          team=0;
+          break;
+        }
+      }
+      cls();
+    }
+
+    //Capturing red
+
+    while(defusing && team == 0 )
+    {
+      cls();
+      if(team==0)lcd.print("CAPTURANDO ZONA");
+      lcd.setCursor(0,0);
+      unsigned int percent=0;
+      unsigned long xTime=millis(); //start disabling time
+      while(defusing)
+      {
+        keypad.getKey();
+        //check if game time runs out during the disabling
+        aTime= millis()- iTime;
+        if((minutos-aTime/60000==0 && 59-((aTime/1000)%60)==0) || minutos-aTime/60000>4000000000){
+          endGame = true;
+        }
+        timeCalcVar = (millis()- xTime)%1000;
+
+        if( timeCalcVar >= 0 && timeCalcVar <= 20)
+        {
+          digitalWrite(REDLED, HIGH);
+          if(soundEnable)tone(tonepin,alarmTone1,200);
+        }
+        if(timeCalcVar >= 480 && timeCalcVar <= 500)
+        {
+          if(soundEnable)tone(tonepin,alarmTone2,200);
+          digitalWrite(REDLED, LOW);
+        }
+
+        unsigned long seconds= millis() - xTime;
+        percent = (seconds)/(ACTIVATESECONDS*10);
+        drawBar(percent);
+
+        if(percent >= 100)
+        {
+          digitalWrite(GREENLED, LOW);
+          team=2;
+          iZoneTime=millis();
+          delay(1000);
+          break;
+        }
+      }
+      cls();
+      digitalWrite(REDLED, LOW);
+    }
+
+    //getting to green zone
+    while(cancelando && team == 0 )
+    {
+      cls();
+      if(team==0)lcd.print("CAPTURANDO ZONA");
+      lcd.setCursor(0,0);
+      unsigned int percent=0;
+      unsigned long xTime=millis(); //start disabling time
+      while(cancelando)
+      {
+        keypad.getKey();
+        //check if game time runs out during the disabling
+        aTime= millis()- iTime;
+        if((minutos-aTime/60000==0 && 59-((aTime/1000)%60)==0) || minutos-aTime/60000>4000000000){
+          endGame = true;
+        }
+        timeCalcVar = (millis()- xTime)%1000;
+
+        if( timeCalcVar >= 0 && timeCalcVar <= 20)
+        {
+          digitalWrite(GREENLED, HIGH);
+          if(soundEnable)tone(tonepin,alarmTone1,200);
+        }
+        if(timeCalcVar >= 480 && timeCalcVar <= 500)
+        {
+          if(soundEnable)tone(tonepin,alarmTone2,200);
+          digitalWrite(GREENLED, LOW);
+        }
+
+        unsigned long seconds= millis() - xTime;
+        percent = (seconds)/(ACTIVATESECONDS*10);
+        drawBar(percent);
+
+        if(percent >= 100)
+        {
+          digitalWrite(GREENLED, LOW);
+          team=1;
+          iZoneTime=millis();
+          delay(1000);
+          break;
+        }
+      }
+      cls();
+      digitalWrite(GREENLED, LOW);
+    }
+  }
+}
+
+void gameOver(){
+  
+
+  if(team==1)greenTime+=millis()-iZoneTime;
+  if(team==2)redTime+=millis()-iZoneTime;
+  digitalWrite(GREENLED, LOW);
+  digitalWrite(REDLED, LOW);
+  digitalWrite(SIR,HIGH );
+  delay (RELAY_TIME);
+  digitalWrite(SIR,LOW );
+  while(!defusing){
+    keypad.getKey();
+    if(defusing){
+      keypad.getKey();
+      break;
+    }
+    lcd.clear();
+    lcd.setCursor(1,0);
+    lcd.print("TEMPO ESGOTADO");
+    lcd.setCursor(0,1);
+
+    //check who team win the base
+    if(greenTime>redTime){
+      //greenteam wins
+      lcd.print(" VITORIA VERDE");
+      digitalWrite(GREENLED, HIGH);
+      delay (5000);
+    }
+    else{
+      //redteam wins
+      lcd.print("VITORIA VERMELHA");
+      digitalWrite(REDLED, HIGH);
+      delay (5000);
+    }
+    delay(7000);
+    keypad.getKey();
+    if(defusing){
+      keypad.getKey();
+      break;
+    }
+    cls();
+    lcd.print("TEMPO VERMELHO:");
+    lcd.setCursor(5,1);
+    printTimeDom(redTime,false);
+    delay(7000);
+    keypad.getKey();
+    if(defusing){
+   
+      break;
+    }
+    cls();
+    lcd.print("TEMPO VERDE:");
+    lcd.setCursor(5,1);
+    printTimeDom(greenTime,false);
+    delay(7000);
+    keypad.getKey();
+    if(defusing){
+    keypad.getKey();
+      break;
+    }
+  }
+  cls();
+  delay(100);
+  lcd.print("JOGAR DE NOVO?");
+  lcd.setCursor(0,1);
+  lcd.print(YES_OR_NOT);
+  while(1)
+  {
+    var = keypad.waitForKey();
+    if(var == 'A' ){
+      tone(tonepin,2400,30);
+      cls();
+      domination();
+      break;
+    }
+    if(var == 'B' ){
+      tone(tonepin,2400,30);
+      menuPrincipal();
+      break;
+    }
+  }
+}
+
+//This fuction compare codeInput[8] and password[8] variables
+boolean comparePassword(){
+
+  for(int i=0;i<8;i++){
+    if(codeInput[i]!=password[i])return false;
+  }
+  return true;
+}
+
+
+void search() {
+ // digitalWrite(SIR,LOW );
+  refresh = true;
+  cls();
+  digitalWrite(REDLED, LOW);
+  digitalWrite(GREENLED, LOW);
+  //SETUP INITIAL TIME
+  int minutos = GAMEMINUTES - 1;
+  unsigned long iTime = millis(); //  initialTime in millisec
+  unsigned long aTime;
+  //var='o';
+
+  //Starting Game Code
+  while (1) { // this is the important code, is a little messy but works good.
+
+    //If you fail disarm.
+    if (endGame) {
+      failSplash();
+    }
+
+    //Code for led blinking
+    timeCalcVar = (millis() - iTime) % 1000;
+    if (timeCalcVar >= 0 && timeCalcVar <= 50)digitalWrite(GREENLED, HIGH);
+    if (timeCalcVar >= 90 && timeCalcVar <= 130)digitalWrite(GREENLED, LOW);
+
+    lcd.setCursor(0, 0);
+    lcd.print(GAME_TIME_TOP   );
+    aTime = millis() - iTime;
+    lcd.setCursor(3, 1);
+
+    //PRINT TIME ON LCD
+
+    printTime(minutos, aTime);
+
+    //###########################CHECKINGS##################
+
+    //Check If Game End
+    if (minutos - aTime / 60000 == 0 && 59 - ((aTime / 1000) % 60) == 0)failSplash();
+    //Serial.println(keypad.getKey());
+    //USED IN PASSWORD GAME
+    if ('B' == keypad.getKey() && passwordEnable) {
+      lcd.clear();
+      lcd.setCursor(2, 0);
+      lcd.print(ARMING_BOMB);
+      delay(1000);//a little delay to think in the password
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print(ENTER_CODE);
+
+      //then compare :D
+
+      if (comparePassword()) destroy();
+      lcd.clear();
+      lcd.setCursor(3, 0);
+      lcd.print(CODE_ERROR);
+      if (soundEnable)tone(tonepin, errorTone, 200);
+      delay(500);
+      cls();
+    }
+    //Check If Is Activating
+    while (defusing && !passwordEnable)
+    {
+      digitalWrite(GREENLED, LOW);
+      lcd.clear();
+      lcd.setCursor(2, 0);
+      lcd.print(ARMING_BOMB);
+      lcd.setCursor(0, 1);
+      unsigned int percent = 0;
+      unsigned long xTime = millis(); //start disabling time
+      while (defusing)
+      {
+        keypad.getKey();
+                percent = (millis() - xTime) / (ACTIVATESECONDS * 10);
+             
+        drawBar(percent);
+        //check if game time runs out during the disabling
+        aTime = millis() - iTime;
+        Serial.println(millis()-xTime);
+        if ((minutos - aTime / 60000 == 0 && 59 - ((aTime / 1000) % 60) == 0) || minutos - aTime / 60000 > 4000000000) {
+          endGame = true;
+        }
+        timeCalcVar = (millis() - xTime) % 1000;
+
+        if ( timeCalcVar >= 0 && timeCalcVar <= 40)
+        {
+          digitalWrite(REDLED, HIGH);
+          if (soundEnable)tone(tonepin, alarmTone1, 200);
+        }
+        if (timeCalcVar >= 480 && timeCalcVar <= 520)
+        {
+          if (soundEnable)tone(tonepin, alarmTone2, 200);
+          digitalWrite(REDLED, LOW);
+        }
+
+
+
+        if (percent >= 100)
+        {
+          digitalWrite(GREENLED, LOW);
+          destroy();// jump to the next gamemode
+        }
+      }
+      cls();
+      digitalWrite(REDLED, LOW);
+
+    }
+  }
+}
+
+void destroy() {
+  //digitalWrite(SIR,HIGH );
+  lcd.clear();
+  lcd.setCursor(3, 0);
+  lcd.print(BOMB_ARMED);
+  delay(1000);
+  int minutos = BOMBMINUTES - 1;
+  unsigned long iTime = millis();
+  unsigned long aTime;
+  int largoTono = 50;
+
+  //MAIN LOOP
+  while (1) {
+
+    //If you fail disarm.
+    if (endGame) {
+      explodeSplash();
+    }
+
+    //Led Blink
+
+    timeCalcVar = (millis() - iTime) % 1000;
+    if (timeCalcVar >= 0 && timeCalcVar <= 40)
+    {
+      digitalWrite(REDLED, HIGH);
+      tone(tonepin, activeTone, largoTono);
+    }
+    if (timeCalcVar >= 180 && timeCalcVar <= 220) {
+      digitalWrite(REDLED, LOW);
+    }
+    //Sound
+    aTime = millis() - iTime;
+    timeCalcVar = (millis() - iTime) % 1000;
+    if (timeCalcVar >= 245 && timeCalcVar <= 255 && minutos - aTime / 60000 < 2 && soundEnable)tone(tonepin, activeTone, largoTono);
+    if (timeCalcVar >= 495 && timeCalcVar <= 510 && minutos - aTime / 60000 < 4 && soundEnable)tone(tonepin, activeTone, largoTono);
+    if (timeCalcVar >= 745 && timeCalcVar <= 760 && minutos - aTime / 60000 < 2 && soundEnable)tone(tonepin, activeTone, largoTono);
+    if ( minutos - aTime / 60000 == 0 && 59 - ((aTime / 1000) % 60) < 10)largoTono = 300;
+
+    lcd.setCursor(1, 0);
+    lcd.print(DETONATION_IN);
+    //Passed Time
+
+    lcd.setCursor(3, 1);
+
+    ////////HERE ARE THE TWO OPTIONS THAT ENDS THE GAME///////////
+
+    ////TIME PASED AWAY AND THE BOMB EXPLODES
+    if (minutos - aTime / 60000 == 0 && 59 - ((aTime / 1000) % 60) == 0) // Check if game ends
+    {
+      explodeSplash();
+    }
+    //print time
+
+    printTime(minutos, aTime);
+
+    //// SECOND OPTION: YOU PRESS DISARMING BUTTON
+
+    //IF IS A PASSWORD GAME
+
+    if ('B' == keypad.getKey() && passwordEnable) {
+
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print(DISARMA);
+      delay(1000);//a little delay to think in the password
+
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print(ENTER_CODE);
+
+
+      //then compare :D
+
+      if (comparePassword()) {
+        disarmedSplash();
+      }
+      lcd.clear();
+      lcd.setCursor(3, 0);
+      lcd.print(CODE_ERROR);
+      if (soundEnable)tone(tonepin, errorTone, 200);
+      delay(500);
+      cls();
+    }
+
+    if (defusing && !passwordEnable) // disarming bomb
+    {
+      lcd.clear();
+      digitalWrite(REDLED, LOW);
+      lcd.setCursor(0, 0);
+      lcd.print(DISARMA);
+      lcd.setCursor(0, 1);
+      unsigned int percent = 0;
+      unsigned long xTime = millis();
+      while (defusing)
+      {
+        keypad.getKey();
+        //check if game time runs out during the disabling
+        aTime = millis() - iTime;
+        if ((minutos - aTime / 60000 == 0 && 59 - ((aTime / 1000) % 60) == 0) || minutos - aTime / 60000 > 4000000000) {
+          endGame = true;
+        }
+        timeCalcVar = (millis() - xTime) % 1000;
+        if (timeCalcVar >= 0 && timeCalcVar <= 20)
+        {
+          digitalWrite(GREENLED, HIGH);
+          if (soundEnable)tone(tonepin, alarmTone1, 200);
+        }
+        if (timeCalcVar  >= 480 && timeCalcVar <= 500)
+        {
+          if (soundEnable)tone(tonepin, alarmTone2, 200);
+          digitalWrite(GREENLED, LOW);
+        }
+        unsigned long seconds = (millis() - xTime);
+        percent = seconds / (ACTIVATESECONDS * 10);
+        drawBar(percent);
+
+        //BOMB DISARMED GAME OVER
+        if (percent >= 100)disarmedSplash();
+      }
+      digitalWrite(REDLED, LOW);
+      digitalWrite(GREENLED, LOW);
+      cls();
+    }
+  }
+}
+
+void explodeSplash(){
+  digitalWrite(SIR,LOW );
+  digitalWrite(REDLED, LOW);
+  digitalWrite(GREENLED, LOW);
+  cls();
+  delay(100);
+  endGame = false;
+  lcd.setCursor(1,0);
+  lcd.print("VITORIA TERROR..");
+  lcd.setCursor(4,1);
+  lcd.print("GAME OVER");
+  digitalWrite(SIR,HIGH );
+  delay (RELAY_TIME);
+  digitalWrite(SIR,LOW );
+  delay(60000);
+  cls();
+
+  //end code
+  lcd.print("JOGAR DE NOVO?");
+  lcd.setCursor(0,1);
+  lcd.print(YES_OR_NOT);
+  while(1)
+  {
+    var = keypad.waitForKey();
+    if(var == 'A' ){
+      tone(tonepin,2400,30);
+      //We have two options, search & destroy and sabotaje play again options so!
+      if(sdStatus){
+        startGameCount();
+        search();
+      }
+      if(sdStatus){
+        sdStatus=true;
+        startGameCount();
+        start=true; //to set iTime to actual millis() :D
+
+      }
+    }
+    if(var == 'B' ){
+      tone(tonepin,2400,30);
+      menuPrincipal();
+
+      break;
+    }
+  }
+}
+void failSplash(){
+  //digitalWrite(SIR,HIGH);
+  digitalWrite(REDLED, LOW);
+  digitalWrite(GREENLED, LOW);
+  cls();
+  delay(100);
+  endGame = false;
+  lcd.setCursor(1,0);
+  lcd.print(" TEMPO ESGOTADO ");
+  lcd.setCursor(0,1);
+  lcd.print("VITORIA TERROR..");
+  digitalWrite(SIR,HIGH );
+  delay (RELAY_TIME);
+  digitalWrite(SIR,LOW );
+  delay(60000);
+  cls();
+
+  //end code
+  lcd.print("JOGAR DE NOVO?");
+  lcd.setCursor(0,1);
+  lcd.print(YES_OR_NOT);
+  while(1)
+  {
+    var = keypad.waitForKey();
+    if(var == 'A' ){
+      tone(tonepin,2400,30);
+      //We have two options, search & destroy and sabotaje play again options so!
+      if(sdStatus){
+        startGameCount();
+        search();
+      }
+      if(sdStatus){
+        sdStatus=true;
+        startGameCount();
+        start=true; //to set iTime to actual millis() :D
+ 
+      }
+    }
+    if(var == 'B' ){
+      tone(tonepin,2400,30);
+      menuPrincipal();
+
+      break;
+    }
+  }
+}
+void disarmedSplash(){
+  digitalWrite(SIR,LOW );
+  endGame = false;
+  digitalWrite(REDLED, LOW);
+  digitalWrite(GREENLED, LOW);
+  if(sdStatus){
+    lcd.clear();
+    lcd.setCursor(1,0);
+    lcd.print("BOMBA DESARMADA");
+    lcd.setCursor(3,1);
+    lcd.print("CT GANHOU");
+    digitalWrite(GREENLED, HIGH);
+    digitalWrite(SIR,HIGH );
+    delay (RELAY_TIME);
+    digitalWrite(SIR,LOW );
+    delay(60000);
+    
+  }
+  //end code
+  lcd.clear();
+  lcd.print("JOGAR DE NOVO?");
+  lcd.setCursor(0,1);
+  lcd.print(YES_OR_NOT);
+  digitalWrite(REDLED, LOW);
+  digitalWrite(GREENLED, LOW);
+  while(1)
+  {
+    var = keypad.waitForKey();
+    if(var == 'A' ){
+      tone(tonepin,2400,30);
+      //We have two options, search & destroy and sabotaje play again options so!
+      if(sdStatus){
+        startGameCount();
+        search();
+      }
+      if(sdStatus){
+        sdStatus=true;
+        startGameCount();
+        start=true; //to set iTime to actual millis() :D
+ 
+      }
+    }
+    if(var == 'B' ){
+      tone(tonepin,2400,30);
+      menuPrincipal();
+      break;
+    }
+  }
+}
+
+void drawBar(byte porcent){
+  //digitalWrite(SIR,HIGH );
+  //TODO: Optimize this code
+  int box=(8*porcent)/10;
+  lcd.setCursor(0,1);
+  while(box>=5){
+    if(box>=5)
+    {
+      lcd.write(4);
+      box-=5;
+    }
+  }
+    switch(box){
+    case 0:
+      break;
+    case 1:
+      lcd.write((uint8_t)0);
+      break;
+    case 2:
+      lcd.write(1);
+      break;
+    case 3:
+      lcd.write(2);
+      break;
+    case 4:
+      lcd.write(3);
+      break;
+    }
+
+
+}
+void cls(){
+  //digitalWrite(SIR,HIGH );
+  lcd.clear();
+  lcd.setCursor(0,0);
+}
+
+void printTime(unsigned long minutos, unsigned long aTiempo){
+
+  timeCalcVar=minutos-aTiempo/60000;
+  //Hours
+
+  if(timeCalcVar/60==0 && refresh){
+      lcd.clear();
+      refresh=false;
+      //delay(100);
+      lcd.setCursor(3,1);
+      Serial.println("!!!!");
+  }
+ 
+  if(timeCalcVar/60>=1){
+ 
+    if(timeCalcVar/60<10)
+  {
+    lcd.setCursor(2,1);
+    lcd.print("0");
+    lcd.print(timeCalcVar/60);
+  }
+  else
+  {
+    lcd.print(timeCalcVar/60);
+  }
+
+  lcd.print(":");
+
+  }
+  //minutes
+  if(timeCalcVar%60<10)
+  {
+    lcd.print("0");
+    lcd.print(timeCalcVar%60);
+  }
+  else
+  {
+    lcd.print(timeCalcVar%60);
+  }
+  lcd.print(":");
+  //seconds
+  timeCalcVar=aTiempo/1000;
+  if(59-(timeCalcVar%60)<10)
+  {
+    lcd.print("0");
+    lcd.print(59-(timeCalcVar%60));
+  }
+  else
+  {
+    lcd.print(59-(timeCalcVar%60));
+  }
+  lcd.print(":");
+  //this not mach with real time, is just a effect, it says 999 because millis%1000 sometimes give 0 LOL
+  lcd.print(999-(millis()%1000));
+}
+
+void printTimeDom(unsigned long aTiempo, boolean showMillis){
+  //minutes
+  if((aTiempo/60000)<10)
+  {
+    lcd.print("0");
+    lcd.print(aTiempo/60000);
+  }
+  else
+  {
+    lcd.print(aTiempo/60000);
+  }
+  lcd.print(":");
+  //seconds
+  if(((aTiempo/1000)%60)<10)
+  {
+    lcd.print("0");
+    lcd.print((aTiempo/1000)%60);
+  }
+  else
+  {
+    lcd.print((aTiempo/1000)%60);
+  }
+  if(showMillis){
+    lcd.print(":");
+    //this not mach with real time, is just a effect, it says 999 because millis%1000 sometimes give 0 LOL
+      lcd.print(999-millis()%1000);
+
+  }
+}
+
+void startGameCount(){
+  //digitalWrite(SIR,HIGH);
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("APERTE UM BOTAO ");
+  lcd.setCursor(0,1);
+  lcd.print("  PARA INICIAR");
+  keypad.waitForKey();//if you press a button game start
+  cls();
+  lcd.setCursor(1,0);
+  lcd.print("INICIO DO JOGO");
+  for(int i = 5; i > 0 ; i--){ // START COUNT GAME INIT
+    lcd.setCursor(5,1);
+    //tone(tonepin,2000,100);
+    lcd.print("EM ");
+    lcd.print(i);
+    delay(1000);
+  }
+    digitalWrite(SIR,HIGH );
+    delay (RELAY_TIME);
+    digitalWrite(SIR,LOW );
+  cls();
+}
+
+void checkArrows(byte i,byte maxx ){
+  //digitalWrite(SIR,HIGH );
+
+  if(i==0){
+    lcd.setCursor(15,1);
+    lcd.write(6);
+  }
+  if(i==maxx){
+    lcd.setCursor(15,0);
+    lcd.write(5);
+  }
+  if(i>0 && i<maxx){
+    lcd.setCursor(15,1);
+    lcd.write(6);
+    lcd.setCursor(15,0);
+    lcd.write(5);
+  }
+}
+
+void activateRelay(){
+  digitalWrite(SIR,HIGH );   // turn the LED on (HIGH is the voltage level)
+  delay(RELAY_TIME);
+  digitalWrite(SIR,LOW);
+
+}
