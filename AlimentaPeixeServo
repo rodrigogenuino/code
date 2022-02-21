@@ -1,0 +1,88 @@
+
+#include "Servo.h" // Inclui a Biblioteca Servo.h 
+ 
+Servo meuservo;  
+int angulo = 0;  
+int botao1 = 0; 
+int message = 0;
+
+unsigned long tempEspera = 5000; // 10 segundos Tempo entre um acionamento e outro
+//unsigned long tempEspera = 4,32e+7; // 12 horas Tempo entre um acionamento e outro 
+unsigned long moverServo = 0; 
+unsigned long taskDelayStart = 0; 
+unsigned long breakDelayStart = 0; 
+bool taskDelayRunning = false; 
+bool breakDelayRunning = false; 
+bool taskLightOn = false; 
+
+#define taskLampPin 13
+#define triggerPin 4
+
+void setup() {
+  pinMode(triggerPin, INPUT_PULLUP); 
+  pinMode(taskLampPin, OUTPUT);        
+  digitalWrite(taskLampPin, LOW);
+  meuservo.attach(2); 
+  pinMode(12, INPUT);  
+  Serial.begin(9600); 
+  meuservo.write(0);
+}
+
+void loop() {
+  message = digitalRead(triggerPin);
+  if (message == 0){ 
+    if (!taskLightOn && !taskDelayRunning & !breakDelayRunning){ 
+      taskDelayStart = millis(); 
+      taskDelayRunning = true;   
+      digitalWrite(taskLampPin, HIGH); 
+      taskLightOn = true;
+      }
+      
+    if (taskLightOn && taskDelayRunning && ((millis() - taskDelayStart) >= tempEspera)) { 
+      taskDelayStart += tempEspera; 
+      taskDelayRunning = false;
+      digitalWrite(taskLampPin, LOW);
+     for (angulo = 0; angulo < 90; angulo += 1) { 
+       meuservo.write(angulo);
+       delay(30); 
+        }
+       delay(2000); 
+        meuservo.write(0); 
+        delay(2000); 
+        
+      taskLightOn = false; // acende a luz
+      breakDelayStart = millis(); //Inicia delay
+      breakDelayRunning = true;
+     
+     }
+    if (!taskLightOn && breakDelayRunning && ((millis() - breakDelayStart) >= moverServo)) { 
+      breakDelayStart += moverServo; 
+      breakDelayRunning = false;
+      taskDelayRunning = true;
+      taskDelayStart = millis(); 
+      digitalWrite(taskLampPin, HIGH);  
+      taskLightOn = true; 
+    
+     }
+   }     
+    if (message == 1){ // se a chave desligada
+        breakDelayRunning = false;
+        taskDelayRunning = false;
+    if (taskLightOn){
+        digitalWrite(taskLampPin, LOW);  //Desliga luz  
+        taskLightOn = false;
+          
+      }
+           
+      botao1 = digitalRead(12);
+    if (botao1 == 1) {
+   for (angulo = 0; angulo < 90; angulo += 1) { 
+       meuservo.write(angulo);
+       delay(30); 
+        }
+       delay(2000); 
+       meuservo.write(0); 
+       delay(2000); 
+   }
+  }  
+}
