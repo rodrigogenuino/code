@@ -1,0 +1,32 @@
+//Arduino Sensor LDR Ligar Rele Dia
+
+int pinoLED = 3;
+int rele = 7;
+int ValorLDR; //Armazenar a leitura do sensor LDR
+int IntensidadeLuz; //Transforma a leitura em uma escala de 0 a 100
+float pinoLDR = A0; //PINO ANALÓGICO utilizado para ler o LDR
+int freq = 5; 
+
+void setup() {
+  Serial.begin(9600); //Define a velocidade do monitor serial
+  pinMode(pinoLDR, INPUT); //Define o pino que o LDR está ligado como entrada de dados
+  pinMode(pinoLED, OUTPUT);
+  pinMode(rele, OUTPUT);
+}
+
+void loop() {
+  ValorLDR = analogRead(pinoLDR); //Faz a leitura do sensor, em um valor que pode variar de 0 a 1023
+  
+  if(ValorLDR<650)
+  {                
+    digitalWrite(pinoLED,LOW);
+    noTone(rele);
+  }
+  else
+  {                    
+    digitalWrite(pinoLED,HIGH);
+    tone(rele,1000); 
+  }
+  
+  delay(1000); //Aguarda 1000 milissegundos para fazer nova leitura      
+}
